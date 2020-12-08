@@ -20,32 +20,41 @@ logger = logging.getLogger('estimation')
 ESTIMATION_SETTINGS_FILE_NAME = 'estimation.yaml'
 
 
+def unlink_files(directory_path, file_types=('csv', 'yaml')):
+    for file_name in os.listdir(directory_path):
+        print(f"endswith {file_name.endswith(file_types)} {file_name}")
+        if file_name.endswith(file_types):
+            file_path = os.path.join(directory_path, file_name)
+            try:
+                if os.path.isfile(file_path):
+                    os.unlink(file_path)
+                    print(f"deleted {file_path}")
+            except Exception as e:
+                print(e)
+
+
 class Estimator(object):
 
-    def __init__(self, model_name, settings_name, estimation_table_recipes):
+    def __init__(self, bundle_name, model_name, estimation_table_recipes):
 
         logger.info("Initialize Estimator for'%s'" % (model_name,))
 
+        self.bundle_name = bundle_name
         self.model_name = model_name
-        self.settings_name = settings_name
+        self.settings_name = model_name
         self.estimation_table_recipes = estimation_table_recipes
         self.estimating = True
 
         # ensure the output data directory exists
-        output_dir = self.data_directory()
+        output_dir = self.output_directory()
         if not os.path.exists(output_dir):
             os.makedirs(output_dir)  # make directory if needed
 
         # delete estimation files
-        file_type = ('csv', 'yaml')
-        for file_name in os.listdir(output_dir):
-            if file_name.startswith(model_name) and file_name.endswith(file_type):
-                file_path = os.path.join(output_dir, file_name)
-                try:
-                    if os.path.isfile(file_path):
-                        os.unlink(file_path)
-                except Exception as e:
-                    print(e)
+        unlink_files(self.output_directory(), file_types=('csv', 'yaml'))
+        if self.bundle_name != self.model_name:
+            # kind of inelegant to always delete these, but ok as they are redundantly recreated for each sub model
+            unlink_files(self.output_directory(bundle_directory=True), file_types=('csv', 'yaml'))
 
         # FIXME - not required?
         # assert 'override_choices' in self.model_settings, \
@@ -99,32 +108,56 @@ class Estimator(object):
 
         manager.release(self)
 
-    def data_directory(self):
+    def output_directory(self, bundle_directory=False):
 
         # shouldn't be asking for this if not estimating
         assert self.estimating
-        assert self.settings_name is not None
+        assert self.model_name is not None
 
-        parent_dir = config.output_file_path('estimation_data_bundle')
+        dir = os.path.join(config.output_file_path('estimation_data_bundle'), self.bundle_name)
 
-        if self.settings_name != self.model_name:
-            parent_dir = os.path.join(parent_dir, self.settings_name)
+        if bundle_directory:
+            # shouldn't be asking - probably confused
+            assert self.bundle_name != self.model_name
 
-        return os.path.join(parent_dir, self.model_name)
+        if self.bundle_name != self.model_name and not bundle_directory:
+            dir = os.path.join(dir, self.model_name)
 
-    def file_path(self, table_name, file_type=None):
+        return dir
+
+    def output_file_path(self, table_name, file_type=None, bundle_directory=False):
 
         # shouldn't be asking for this if not estimating
         assert self.estimating
+
+        output_dir = self.output_directory(bundle_directory)
+
+        if bundle_directory:
+            file_name = f"{self.bundle_name}_{table_name}"
+        else:
+            if self.model_name == self.bundle_name:
+                file_name = f"{self.model_name}_{table_name}"
+            else:
+                file_name = f"{self.bundle_name}_{table_name}"
 
         if file_type:
-            file_name = "%s_%s.%s" % (self.model_name, table_name, file_type)
-        else:
-            file_name = "%s_%s" % (self.model_name, table_name)
+            file_name = f"{file_name}.{file_type}"
 
-        return os.path.join(self.data_directory(), file_name)
+        return os.path.join(output_dir, file_name)
 
-    def write_table(self, df, table_name, index=True, append=True):
+    def write_table(self, df, table_name, index=True, append=True, bundle_directory=False):
+        """
+
+        Parameters
+        ----------
+        df
+        table_name: str
+            if table_name has file type, then pass through filename without adding model or bundle name prefix
+        index: booelan
+        append: boolean
+        bundle_directory: boolean
+
+        """
 
         def cache_table(df, table_name, append):
             if table_name in self.tables and not append:
@@ -134,8 +167,12 @@ class Estimator(object):
             else:
                 self.tables[table_name] = df.copy()
 
-        def write_table(df, table_name, index, append):
-            file_path = self.file_path(table_name, 'csv')
+        def write_table(df, table_name, index, append, bundle_directory):
+            if table_name.endswith('.csv'):
+                # pass through filename without adding model or bundle name prefix
+                file_path = os.path.join(self.output_directory(bundle_directory), table_name)
+            else:
+                file_path = self.output_file_path(table_name, 'csv', bundle_directory)
             file_exists = os.path.isfile(file_path)
             if file_exists and not append:
                 raise RuntimeError("write_table %s append=False and file exists: %s" % (table_name, file_path))
@@ -152,7 +189,7 @@ class Estimator(object):
             self.debug('write_table cache: %s' % table_name)
 
         if write:
-            write_table(df, table_name, index, append)
+            write_table(df, table_name, index, append, bundle_directory)
             self.debug('write_table write: %s' % table_name)
 
     def write_omnibus_table(self):
@@ -173,7 +210,7 @@ class Estimator(object):
 
             df = pd.concat([self.tables[t] for t in table_names], axis=concat_axis)
 
-            file_path = self.file_path(omnibus_table, 'csv')
+            file_path = self.output_file_path(omnibus_table, 'csv')
 
             assert not os.path.isfile(file_path)
 
@@ -182,11 +219,11 @@ class Estimator(object):
 
             self.debug('write_omnibus_choosers: %s' % file_path)
 
-    def write_dict(self, d, dict_name):
+    def write_dict(self, d, dict_name, bundle_directory):
 
         assert self.estimating
 
-        file_path = self.file_path(dict_name, 'yaml')
+        file_path = self.output_file_path(dict_name, 'yaml', bundle_directory)
 
         # we don't know how to concat, and afraid to overwrite
         assert not os.path.isfile(file_path)
@@ -226,19 +263,19 @@ class Estimator(object):
     def write_nest_spec(self, nest_spec):
         self.write_dict(self, nest_spec, 'nest_spec')
 
-    def copy_model_settings(self, settings_file_name, tag='model_settings'):
+    def copy_model_settings(self, settings_file_name, tag='model_settings', bundle_directory=False):
 
         input_path = config.base_settings_file_path(settings_file_name)
 
-        output_path = self.file_path(tag, 'yaml')
+        output_path = self.output_file_path(tag, 'yaml', bundle_directory)
 
         shutil.copy(input_path, output_path)
 
-    def write_model_settings(self, model_settings, settings_file_name):
+    def write_model_settings(self, model_settings, settings_file_name, bundle_directory=False):
 
-        self.copy_model_settings(settings_file_name)
+        self.copy_model_settings(settings_file_name, bundle_directory=bundle_directory)
         if 'inherit_settings' in model_settings:
-            self.write_dict(model_settings, 'inherited_model_settings')
+            self.write_dict(model_settings, 'inherited_model_settings', bundle_directory)
 
     def melt_alternatives(self, df):
 
@@ -294,8 +331,8 @@ class Estimator(object):
     def write_expression_values(self, df):
         self.write_table(df, 'expression_values', append=True)
 
-    def write_alternatives(self, alternatives_df):
-        self.write_table(alternatives_df, 'alternatives', append=True)
+    def write_alternatives(self, alternatives_df, bundle_directory=False):
+        self.write_table(alternatives_df, 'alternatives', append=True, bundle_directory=bundle_directory)
 
     def write_interaction_sample_alternatives(self, alternatives_df):
         alternatives_df = self.melt_alternatives(alternatives_df)
@@ -315,14 +352,16 @@ class Estimator(object):
         assert self.estimating
         return manager.get_survey_values(model_values, table_name, column_names)
 
-    def write_spec(self, model_settings=None, file_name=None, tag='SPEC'):
+    def write_spec(self, model_settings=None, file_name=None, tag='SPEC', bundle_directory=False):
 
         if model_settings is not None:
             assert file_name is None
             file_name = model_settings[tag]
 
         input_path = config.config_file_path(file_name)
-        output_path = self.file_path(table_name=tag, file_type='csv')
+
+        table_name = tag  # more readable than full sped file_name
+        output_path = self.output_file_path(table_name, 'csv', bundle_directory)
         shutil.copy(input_path, output_path)
         self.debug("estimate.write_spec: %s" % output_path)
 
@@ -405,7 +444,7 @@ class EstimationManager(object):
             (model_estimation_table_type, model_name, ESTIMATION_SETTINGS_FILE_NAME)
 
         self.estimating[model_name] = \
-            Estimator(model_name, model_name,
+            Estimator(bundle_name, model_name,
                       estimation_table_recipes=self.estimation_table_recipes[model_estimation_table_type])
 
         return self.estimating[model_name]
