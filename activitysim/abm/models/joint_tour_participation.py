@@ -19,6 +19,9 @@ from .util import estimation
 from activitysim.core.util import reindex
 from .util.overlap import person_time_window_overlap
 
+from activitysim.abm.models.util.canonical_ids import MAX_PNUM
+
+
 logger = logging.getLogger(__name__)
 
 
@@ -51,11 +54,10 @@ def joint_tour_participation_candidates(joint_tours, persons_merged):
     candidates = candidates[eligible]
 
     # - stable (predictable) index
-    MAX_PNUM = 100
-    if candidates.PNUM.max() > MAX_PNUM:
-        # if this happens, channel random seeds will overlap at MAX_PNUM (not probably a big deal)
-        logger.warning("max persons.PNUM (%s) > MAX_PNUM (%s)", candidates.PNUM.max(), MAX_PNUM)
-
+    # if this happens, participant_id may not be unique
+    # channel random seeds will overlap at MAX_PNUM (not probably a big deal)
+    # and estimation infer will fail
+    assert candidates.PNUM.max() < MAX_PNUM, f"max persons.PNUM ({candidates.PNUM.max()}) > MAX_PNUM ({MAX_PNUM})"
     candidates['participant_id'] = (candidates[joint_tours.index.name] * MAX_PNUM) + candidates.PNUM
     candidates.set_index('participant_id', drop=True, inplace=True, verify_integrity=True)
 
@@ -282,7 +284,7 @@ def joint_tour_participation(
     if estimator:
         estimator.write_model_settings(model_settings, model_settings_file_name)
         estimator.write_spec(model_settings)
-        estimator.write_coefficients(coefficients_df)
+        estimator.write_coefficients(coefficients_df, model_settings)
         estimator.write_choosers(candidates)
 
     # add tour-based chunk_id so we can chunk all trips in tour together
@@ -311,24 +313,19 @@ def joint_tour_participation(
     PARTICIPATE_CHOICE = model_spec.columns.get_loc(choice_col)
 
     participate = (choices == PARTICIPATE_CHOICE)
+    print(participate)
 
     if estimator:
         estimator.write_choices(choices)
 
         # we override the 'participate' boolean series, instead of raw alternative index in 'choices' series
-        # its value is determined by whether or not the candidate's person_id is found
-        # as a participant row in the joint_tour_participant table rows for that tour
-        df = estimator.join_survey_values(df=candidates[['tour_id', 'person_id']],
-                                          table_name='joint_tour_participants')
-        participate = ~df.isnull().any(axis=1)
-
-        print("model_spec.columns", model_spec.columns)
-        # PARTICIPATE_CHOICE is presumably either 0 or 1, and so NOT_PARTICIPATE is necessarily the other
-        assert len(model_spec.columns == 2)
+        # its value depends on whether the candidate's 'participant_id' is in the joint_tour_participant index
+        survey_df = estimator.get_survey_table('joint_tour_participants')
+        participate = pd.Series(choices.index.isin(survey_df['participant_id']), index=choices.index)
 
         # but estimation software wants to know the choices value (alternative index)
         choices = participate.replace({True: PARTICIPATE_CHOICE, False: 1-PARTICIPATE_CHOICE})
-        estimator.write_override_choices(choices)
+        estimator.write_override_choices(participate)
 
         estimator.end_estimation()
 

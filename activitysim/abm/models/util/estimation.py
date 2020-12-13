@@ -22,7 +22,6 @@ ESTIMATION_SETTINGS_FILE_NAME = 'estimation.yaml'
 
 def unlink_files(directory_path, file_types=('csv', 'yaml')):
     for file_name in os.listdir(directory_path):
-        print(f"endswith {file_name.endswith(file_types)} {file_name}")
         if file_name.endswith(file_types):
             file_path = os.path.join(directory_path, file_name)
             try:
@@ -234,12 +233,33 @@ class Estimator(object):
 
         self.debug("estimate.write_dict: %s" % file_path)
 
-    def write_coefficients(self, coefficients_df, tag='coefficients'):
-        assert self.estimating
-        self.write_table(coefficients_df, tag, append=False)
+    def write_coefficients(self, coefficients_df=None, model_settings=None, file_name=None):
+        """
+        Because the whole point of estimation is to generate new coefficient values
+        we want to make it easy to put the coefficients file back in configs
+        So we make a point of preserving the same filename as the original config file
+        """
 
-    def write_coefficients_template(self, coefficients_df, tag='coefficients_template'):
+        if model_settings is not None:
+            assert file_name is None
+            file_name = model_settings['COEFFICIENTS']
+
+        assert file_name is not None
+
+        if coefficients_df is None:
+            coefficients_df = simulate.read_model_coefficients(file_name=file_name)
+
+        # preserve original config file name
+        base_file_name = os.path.basename(file_name)
+
         assert self.estimating
+        self.write_table(coefficients_df, base_file_name, append=False)
+
+    def write_coefficients_template(self, model_settings):
+        assert self.estimating
+
+        coefficients_df = simulate.read_model_coefficient_template(model_settings)
+        tag = 'coefficients_template'
         self.write_table(coefficients_df, tag, append=False)
 
     def write_choosers(self, choosers_df):
@@ -342,15 +362,15 @@ class Estimator(object):
         interaction_df = self.melt_alternatives(interaction_df)
         self.write_table(interaction_df, 'interaction_simulate_alternatives', append=True)
 
-    def join_survey_values(self, df, table_name, left_on=None, right_on=None):
-        # convenience method so deep callers don't need to import estimation
-        assert self.estimating
-        return manager.join_survey_values(df, table_name, left_on, right_on)
-
     def get_survey_values(self, model_values, table_name, column_names):
         # convenience method so deep callers don't need to import estimation
         assert self.estimating
         return manager.get_survey_values(model_values, table_name, column_names)
+
+    def get_survey_table(self, table_name):
+        # convenience method so deep callers don't need to import estimation
+        assert self.estimating
+        return manager.get_survey_table(table_name)
 
     def write_spec(self, model_settings=None, file_name=None, tag='SPEC', bundle_directory=False):
 
@@ -360,7 +380,7 @@ class Estimator(object):
 
         input_path = config.config_file_path(file_name)
 
-        table_name = tag  # more readable than full sped file_name
+        table_name = tag  # more readable than full spec file_name
         output_path = self.output_file_path(table_name, 'csv', bundle_directory)
         shutil.copy(input_path, output_path)
         self.debug("estimate.write_spec: %s" % output_path)
@@ -382,6 +402,7 @@ class EstimationManager(object):
         settings = config.read_model_settings(ESTIMATION_SETTINGS_FILE_NAME)
         self.enabled = settings.get('enable', 'True')
         self.bundles = settings.get('bundles', [])
+
         self.model_estimation_table_types = settings.get('model_estimation_table_types', {})
         self.estimation_table_recipes = settings.get('estimation_table_recipes', {})
 
@@ -457,7 +478,8 @@ class EstimationManager(object):
         assert self.enabled
         if table_name not in self.survey_tables:
             logger.warning("EstimationManager. get_survey_table: survey table '%s' not in survey_tables" % table_name)
-        return self.survey_tables[table_name].get('df')
+        df = self.survey_tables[table_name].get('df')
+        return df
 
     def get_survey_values(self, model_values, table_name, column_names):
 
@@ -483,7 +505,8 @@ class EstimationManager(object):
             raise RuntimeError("missing columns (%s) in survey table %s" % (missing_columns, table_name))
 
         assert set(column_names).issubset(set(survey_df.columns)), \
-            "missing columns (%s) in survey table %s" % (list(set(column_names) - set(survey_df.columns)), table_name)
+            f"missing columns ({list(set(column_names) - set(survey_df.columns))}) " \
+            f"in survey table {table_name} {list(survey_df.columns)}"
 
         # for now tour_id is asim_tour_id in survey_df
         asim_df_index_name = dest_index.name
@@ -522,26 +545,6 @@ class EstimationManager(object):
             values[c] = survey_values
 
         return values[column_name] if column_name else values
-
-    def join_survey_values(self, model_df, table_name, left_on, right_on):
-
-        left_on = left_on or list(model_df.columns)
-        right_on = right_on or left_on
-
-        # read survey_df table
-        survey_df = manager.get_survey_table(table_name)
-        assert survey_df is not None, "estimation.get_override_choices: table '%s' not found" % (table_name,)
-
-        assert isinstance(model_df, pd.DataFrame), \
-            "I expected model_df to be a DataFrame, but got %s" % (type(model_df),)
-
-        assert right_on is not None, "I expected to find 'right_on' column list in merge settings."
-        assert set(right_on).issubset(set(survey_df.columns)), \
-            "Not all 'right_on' columns (%s) not found in %s" % (right_on, table_name)
-
-        df = pd.merge(model_df.reset_index(), survey_df[right_on],
-                      left_on=left_on, right_on=right_on, how='left').set_index(model_df.index.name)
-        return df
 
 
 manager = EstimationManager()

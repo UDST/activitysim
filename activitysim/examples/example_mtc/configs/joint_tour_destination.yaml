@@ -1,7 +1,7 @@
 
 SAMPLE_SPEC: non_mandatory_tour_destination_sample.csv
 SPEC: non_mandatory_tour_destination.csv
-COEFFICIENTS: non_mandatory_tour_destination_coeffs.csv
+COEFFICIENTS: non_mandatory_tour_destination_coefficients.csv
 
 SEGMENTS:
   - shopping

@@ -93,7 +93,7 @@ def mandatory_tour_scheduling(tours,
             estimators[spec_segment_name] = estimator  # add to local list
             estimator.write_model_settings(model_settings, model_settings_file_name)
             estimator.write_spec(spec_settings)
-            estimator.write_coefficients(coefficients_df)
+            estimator.write_coefficients(coefficients_df, model_settings)
 
     # - spec dict segmented by primary_purpose
     tour_segment_settings = model_settings.get('TOUR_SPEC_SEGMENTS', {})

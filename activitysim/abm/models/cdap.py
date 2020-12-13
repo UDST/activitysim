@@ -79,6 +79,7 @@ def cdap_simulate(persons_merged, persons, households,
         estimator.write_model_settings(model_settings, 'cdap.yaml')
         estimator.write_spec(model_settings, tag='INDIV_AND_HHSIZE1_SPEC')
         estimator.write_spec(model_settings=model_settings, tag='FIXED_RELATIVE_PROPORTIONS_SPEC')
+        estimator.write_coefficients(coefficients_df, model_settings)
         estimator.write_table(cdap_interaction_coefficients, 'interaction_coefficients', index=False, append=False)
         estimator.write_choosers(persons_merged)
         for hhsize in range(2, cdap.MAX_HHSIZE + 1):

@@ -189,9 +189,9 @@ def read_model_coefficient_template(model_settings):
     assert 'COEFFICIENT_TEMPLATE' in model_settings, \
         "'COEFFICIENT_TEMPLATE' not in model_settings in %s" % model_settings.get('source_file_paths')
 
-    coeffs_file_name = model_settings['COEFFICIENT_TEMPLATE']
+    coefficients_file_name = model_settings['COEFFICIENT_TEMPLATE']
 
-    file_path = config.config_file_path(coeffs_file_name)
+    file_path = config.config_file_path(coefficients_file_name)
     try:
         template = pd.read_csv(file_path, comment='#', index_col='coefficient_name')
     except ValueError:
