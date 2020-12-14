@@ -1,8 +1,24 @@
+
 # input tables
+#
+# activitysim uses "well-known" index and foreign key names for imported tables (e.g. households, persons, land_use)
+# as well as for created tables (tours, joint_tour_participants, trips)
+# e.g. the households table must have an index column 'household_id' and the foreign key to households in the
+# persons table is also household_id. This naming convention allows activitysim to intuit the relationship
+# between tables - for instance, to ensure that multiprocess slicing includes all the persons, tours, and trips
+# in the same subprocess pipeline. The same strategy is also when chunking choosers, and to support tracing by
+# household_id.
+#
+# you cannot change the well-known name of the index. However, if your input file has a different id column name,
+# you can rename it to the required index name with the rename_columns directive.
+# In the settings below, the 'ZONE' column in the imported table is renamed 'TAZ' in the rename_columns settings.
+#
 input_table_list:
+  #
+  # households (table index 'household_id')
+  #
   - tablename: households
     filename: households.csv
-    #index_col: household_id
     rename_columns:
       HHID: household_id
       PERSONS: hhsize
@@ -15,9 +31,11 @@ input_table_list:
       - HHT
       - auto_ownership
       - num_workers
+  #
+  # persons (table index 'person_id')
+  #
   - tablename: persons
     filename: persons.csv
-    #index_col: person_id
     rename_columns:
       PERID: person_id
     keep_columns:
@@ -28,9 +46,11 @@ input_table_list:
       - pemploy
       - pstudent
       - ptype
+  #
+  # land_use (table index 'TAZ')
+  #
   - tablename: land_use
     filename: land_use.csv
-    #index_col: TAZ
     rename_columns:
       ZONE: TAZ
       COUNTY: county_id
@@ -59,7 +79,6 @@ input_table_list:
       - COLLPTE
       - TOPOLOGY
       - TERMINAL
-
 
 # input skims
 skims_file: skims.omx
