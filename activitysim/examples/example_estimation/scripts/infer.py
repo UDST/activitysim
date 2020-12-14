@@ -384,7 +384,7 @@ def patch_tour_ids(persons, tours, joint_tour_participants):
     # pathological knowledge, but awkward to conflate with joint_tour_participation.py logic
     participant_pnum = reindex(persons.PNUM, patched_joint_tour_participants['person_id'])
     patched_joint_tour_participants[ASIM_PARTICIPANT_ID] = \
-        (patched_joint_tour_participants[ASIM_TOUR_ID] * cid.MAX_PNUM) + participant_pnum
+        (patched_joint_tour_participants[ASIM_TOUR_ID] * cid.MAX_PARTICIPANT_PNUM) + participant_pnum
 
     #####################
     # non_mandatory tours

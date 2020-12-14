@@ -2,7 +2,7 @@
 input_table_list:
   - tablename: households
     filename: households.csv
-    index_col: household_id
+    #index_col: household_id
     rename_columns:
       HHID: household_id
       PERSONS: hhsize
@@ -17,7 +17,7 @@ input_table_list:
       - num_workers
   - tablename: persons
     filename: persons.csv
-    index_col: person_id
+    #index_col: person_id
     rename_columns:
       PERID: person_id
     keep_columns:
@@ -30,7 +30,7 @@ input_table_list:
       - ptype
   - tablename: land_use
     filename: land_use.csv
-    index_col: TAZ
+    #index_col: TAZ
     rename_columns:
       ZONE: TAZ
       COUNTY: county_id

@@ -9,10 +9,23 @@ from activitysim.core.util import reindex
 
 logger = logging.getLogger(__name__)
 
+
+RANDOM_CHANNELS = ['households', 'persons', 'tours', 'joint_tour_participants', 'trips']
+TRACEABLE_TABLES = ['households', 'persons', 'tours', 'joint_tour_participants', 'trips']
+
+CANONICAL_TABLE_INDEX_NAMES = {
+    'households': 'household_id',
+    'persons': 'person_id',
+    'tours': 'tour_id',
+    'joint_tour_participants': 'participant_id',
+    'trips': 'trip_id',
+    'land_use': 'TAZ'
+}
+
 # unfortunately the two places this is needed (joint_tour_participation and estimation.infer
 # don't have much in common in terms of data structures
-# candidates['participant_id'] = (candidates[joint_tours.index.name] * MAX_PNUM) + candidates.PNUM
-MAX_PNUM = 100
+# candidates['participant_id'] = (candidates[joint_tours.index.name] * MAX_PARTICIPANT_PNUM) + candidates.PNUM
+MAX_PARTICIPANT_PNUM = 100
 
 
 def enumerate_tour_types(tour_flavors):

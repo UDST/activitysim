@@ -19,7 +19,7 @@ from .util import estimation
 from activitysim.core.util import reindex
 from .util.overlap import person_time_window_overlap
 
-from activitysim.abm.models.util.canonical_ids import MAX_PNUM
+from activitysim.abm.models.util.canonical_ids import MAX_PARTICIPANT_PNUM
 
 
 logger = logging.getLogger(__name__)
@@ -55,10 +55,11 @@ def joint_tour_participation_candidates(joint_tours, persons_merged):
 
     # - stable (predictable) index
     # if this happens, participant_id may not be unique
-    # channel random seeds will overlap at MAX_PNUM (not probably a big deal)
+    # channel random seeds will overlap at MAX_PARTICIPANT_PNUM (not probably a big deal)
     # and estimation infer will fail
-    assert candidates.PNUM.max() < MAX_PNUM, f"max persons.PNUM ({candidates.PNUM.max()}) > MAX_PNUM ({MAX_PNUM})"
-    candidates['participant_id'] = (candidates[joint_tours.index.name] * MAX_PNUM) + candidates.PNUM
+    assert candidates.PNUM.max() < MAX_PARTICIPANT_PNUM, \
+        f"max persons.PNUM ({candidates.PNUM.max()}) > MAX_PARTICIPANT_PNUM ({MAX_PARTICIPANT_PNUM})"
+    candidates['participant_id'] = (candidates[joint_tours.index.name] * MAX_PARTICIPANT_PNUM) + candidates.PNUM
     candidates.set_index('participant_id', drop=True, inplace=True, verify_integrity=True)
 
     return candidates
